@@ -1,24 +1,4 @@
-"""Theme Transformer Training Code
-
-usage: inference.py [-h] [--model_path MODEL_PATH] [--theme THEME]
-                    [--seq_length SEQ_LENGTH] [--seed SEED]
-                    [--out_midi OUT_MIDI] [--cuda] [--max_len MAX_LEN]
-                    [--temp TEMP]
-  --model_path MODEL_PATH   model file
-  --theme THEME             theme file
-  --seq_length SEQ_LENGTH   generated seq length
-  --seed SEED               random seed (set to -1 to use random seed) (change different if the model stucks)
-  --out_midi OUT_MIDI       output midi file
-  --cuda                    use CUDA
-  --max_len MAX_LEN         number of tokens to predict
-  --temp TEMP               temperature
-
-    Author: Ian Shih
-    Email: yjshih23@gmail.com
-    Date: 2021/11/03
-    
-"""
-device_str = 'cuda:0'
+device_str = "cuda:0"
 import shutil
 from torch.utils.data import DataLoader
 import numpy as np
@@ -47,11 +27,11 @@ set_global_random_seed(args.seed)
 myvocab = Vocab()
 
 # create directory for training purpose
-os.makedirs("./ckpts",exist_ok=True)
-os.makedirs("./logs",exist_ok=True)
+os.makedirs("./ckpts", exist_ok=True)
+os.makedirs("./logs", exist_ok=True)
 
 # create work directory
-while(1):
+while 1:
     exp_name = input("Enter exp name : ")
     if os.path.exists(os.path.join("./ckpts", exp_name)):
         ans = input("work dir exists! overwrite? [Y/N]:")
@@ -60,26 +40,31 @@ while(1):
     else:
         break
 
-os.makedirs(os.path.join(
-    "./ckpts/", exp_name), exist_ok=True)
-os.makedirs(os.path.join("./ckpts/",
-            exp_name, "script"), exist_ok=True)
-os.makedirs(os.path.join("./ckpts/",
-            exp_name, "script", "preprocess"), exist_ok=True)
-os.makedirs(os.path.join("./ckpts/",
-            exp_name, "log"), exist_ok=True)
+os.makedirs(os.path.join("./ckpts/", exp_name), exist_ok=True)
+os.makedirs(os.path.join("./ckpts/", exp_name, "script"), exist_ok=True)
+os.makedirs(os.path.join("./ckpts/", exp_name, "script", "preprocess"), exist_ok=True)
+os.makedirs(os.path.join("./ckpts/", exp_name, "log"), exist_ok=True)
 
-checkpoint_folder = "./ckpts/{}".format(
-    exp_name)
+checkpoint_folder = "./ckpts/{}".format(exp_name)
 # copy scripts
-file_to_save = ['train.py', 'inference.py', 'myTransformer.py','randomness.py',
-                'parse_arg.py', 'mymodel.py', 'preprocess/vocab.py', 'preprocess/music_data.py']
+file_to_save = [
+    "train.py",
+    "inference.py",
+    "myTransformer.py",
+    "randomness.py",
+    "parse_arg.py",
+    "mymodel.py",
+    "preprocess/vocab.py",
+    "preprocess/music_data.py",
+]
 for x in file_to_save:
     shutil.copyfile(x, os.path.join(checkpoint_folder, "script", x))
 
 # create logger for log
-mylogger = logger.logger(filepath=os.path.join(
-    checkpoint_folder, "log/log_{}.txt".format(exp_name)),overrite=True)
+mylogger = logger.logger(
+    filepath=os.path.join(checkpoint_folder, "log/log_{}.txt".format(exp_name)),
+    overrite=True,
+)
 if os.path.exists("logs/log_{}.txt".format(exp_name)):
     os.remove("logs/log_{}.txt".format(exp_name))
 os.link(mylogger.filepath, "logs/log_{}.txt".format(exp_name))
@@ -88,33 +73,33 @@ mylogger.log("Exp_Name : {}".format(exp_name))
 
 
 # devices
-device = torch.device( device_str if args.cuda else 'cpu')
-device_cpu = torch.device('cpu')
+device = torch.device(device_str if args.cuda else "cpu")
+device_cpu = torch.device("cpu")
 
 
 # dataset
-train_dataset = getMusicDataset(pkl_path="./data_pkl/train_seg2_512.pkl",
-                                args=args,
-                                vocab=myvocab)
+train_dataset = getMusicDataset(
+    pkl_path="./data_pkl/train_seg2_512.pkl", args=args, vocab=myvocab
+)
 
 
-val_dataset = getMusicDataset(pkl_path="./data_pkl/val_seg2_512.pkl",
-                                args=args,
-                                vocab=myvocab)
+val_dataset = getMusicDataset(
+    pkl_path="./data_pkl/val_seg2_512.pkl", args=args, vocab=myvocab
+)
 
 
-train_loader = DataLoader(dataset=train_dataset,
-                          batch_size=args.batch_size,
-                          shuffle=True,
-                          num_workers=4)
+train_loader = DataLoader(
+    dataset=train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4
+)
 
-val_loader = DataLoader(dataset=val_dataset,
-                        batch_size=2,
-                        shuffle=False,
-                        num_workers=4)
+val_loader = DataLoader(dataset=val_dataset, batch_size=2, shuffle=False, num_workers=4)
 
+
+assert len(args.xorpattern) == args.num_encoder_layers, "xor pattern should be same as num of encoder layers",
 # define model
-model = myLM(myvocab.n_tokens, d_model=256,num_encoder_layers=6,xorpattern=[0,0,0,1,1,1])
+model = myLM(
+    myvocab.n_tokens, d_model=256, num_encoder_layers=args.num_encoder_layers, xorpattern=args.xorpattern
+)
 
 mylogger.log("Model hidden dim : {}".format(model.d_model))
 mylogger.log("Encoder Layers #{}".format(model.num_encoder_layers))
@@ -128,16 +113,25 @@ optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
 # scheduler
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-    optimizer, T_max=args.max_step,eta_min=args.lr_min)
+    optimizer, T_max=args.max_step, eta_min=args.lr_min
+)
 
-if not args.restart_point == '':
+if not args.restart_point == "":
     # restart from checkpoint
     mylogger.log("Restart from {}".format(args.restart_point))
-    model.load_state_dict(torch.load(args.restart_point,map_location=device_str))
+    model.load_state_dict(torch.load(args.restart_point, map_location=device_str))
     mylogger.log("model loaded")
-    optimizer.load_state_dict(torch.load(args.restart_point.replace('model_','optimizer_'),map_location=device_str))
+    optimizer.load_state_dict(
+        torch.load(
+            args.restart_point.replace("model_", "optimizer_"), map_location=device_str
+        )
+    )
     mylogger.log("optimizer loaded")
-    scheduler.load_state_dict(torch.load(args.restart_point.replace('model_','scheduler_'),map_location=device_str))
+    scheduler.load_state_dict(
+        torch.load(
+            args.restart_point.replace("model_", "scheduler_"), map_location=device_str
+        )
+    )
     mylogger.log("scheduler loaded")
 
     for state in optimizer.state.values():
@@ -167,8 +161,10 @@ def train(epoch_num):
     total_acc = 0
     steps = 0
     for batch_idx, data in enumerate(train_loader):
-        print("Epoch {} Step [{}/{}] ".format(epoch_num,
-              batch_idx, len(train_loader)), end='')
+        print(
+            "Epoch {} Step [{}/{}] ".format(epoch_num, batch_idx, len(train_loader)),
+            end="",
+        )
 
         data = {key: value.to(device) for key, value in data.items()}
 
@@ -188,10 +184,10 @@ def train(epoch_num):
         fullsong_output = data["tgt"][1:, :]
 
         att_msk = model.transformer_model.generate_square_subsequent_mask(
-            fullsong_input.shape[0]).to(device)
+            fullsong_input.shape[0]
+        ).to(device)
 
         mem_msk = None
-
 
         output = model(
             src=data["src"],
@@ -200,26 +196,22 @@ def train(epoch_num):
             tgt_label=data["tgt_theme_msk"][:-1, :],
             src_key_padding_mask=data["src_msk"],
             tgt_key_padding_mask=tgt_input_msk,
-            memory_mask=mem_msk
+            memory_mask=mem_msk,
         )
 
-        loss = criterion(output.view(-1, myvocab.n_tokens),
-                         fullsong_output.reshape(-1))
+        loss = criterion(output.view(-1, myvocab.n_tokens), fullsong_output.reshape(-1))
 
         predict = output.view(-1, myvocab.n_tokens).argmax(dim=-1)
 
         correct = predict.eq(fullsong_output.reshape(-1))
 
-        correct = torch.sum(
-            correct * (~tgt_output_msk).reshape(-1).float()).item()
+        correct = torch.sum(correct * (~tgt_output_msk).reshape(-1).float()).item()
 
-        correct = correct / \
-            torch.sum((~tgt_output_msk).reshape(-1).float()).item()
+        correct = correct / torch.sum((~tgt_output_msk).reshape(-1).float()).item()
 
         total_acc += correct
 
         print("Acc : {:.2f} ".format(correct), end="")
-
 
         loss.backward()
 
@@ -229,22 +221,33 @@ def train(epoch_num):
 
         if train_step < args.warmup_step:
             curr_lr = args.lr * train_step / args.warmup_step
-            optimizer.param_groups[0]['lr'] = curr_lr
+            optimizer.param_groups[0]["lr"] = curr_lr
         else:
             scheduler.step()
-        
 
         total_loss += loss.item()
 
-        print("Loss : {:.2f} lr:{:.4f} ".format(
-            loss.item(), optimizer.param_groups[0]['lr']), end='\r')
+        print(
+            "Loss : {:.2f} lr:{:.4f} ".format(
+                loss.item(), optimizer.param_groups[0]["lr"]
+            ),
+            end="\r",
+        )
 
         steps += 1
         train_step += 1
 
-    mylogger.log("Epoch {} lr:{:.4f} train_acc : {:.2f} train_loss : {:.2f}  time:{:.2f} ".format(epoch_num,
-                                                                                                  optimizer.param_groups[0]['lr'], total_acc/steps, total_loss/steps, time.time()-start_time), end='')
-    
+    mylogger.log(
+        "Epoch {} lr:{:.4f} train_acc : {:.2f} train_loss : {:.2f}  time:{:.2f} ".format(
+            epoch_num,
+            optimizer.param_groups[0]["lr"],
+            total_acc / steps,
+            total_loss / steps,
+            time.time() - start_time,
+        ),
+        end="",
+    )
+
 
 def evalulate(epoch_num):
     """evaluate validation set
@@ -278,7 +281,8 @@ def evalulate(epoch_num):
             fullsong_output = data["tgt"][1:, :]
 
             att_msk = model.transformer_model.generate_square_subsequent_mask(
-                fullsong_input.shape[0]).to(device)
+                fullsong_input.shape[0]
+            ).to(device)
 
             mem_msk = None
 
@@ -289,21 +293,20 @@ def evalulate(epoch_num):
                 tgt_label=data["tgt_theme_msk"][:-1, :],
                 src_key_padding_mask=data["src_msk"],
                 tgt_key_padding_mask=tgt_input_msk,
-                memory_mask=mem_msk
+                memory_mask=mem_msk,
             )
 
-            loss = criterion(output.view(-1, myvocab.n_tokens),
-                             fullsong_output.reshape(-1))
+            loss = criterion(
+                output.view(-1, myvocab.n_tokens), fullsong_output.reshape(-1)
+            )
 
             predict = output.view(-1, myvocab.n_tokens).argmax(dim=-1)
 
             correct = predict.eq(fullsong_output.reshape(-1))
 
-            correct = torch.sum(
-                correct * (~tgt_output_msk).reshape(-1).float()).item()
+            correct = torch.sum(correct * (~tgt_output_msk).reshape(-1).float()).item()
 
-            correct = correct / \
-                torch.sum((~tgt_output_msk).reshape(-1).float()).item()
+            correct = correct / torch.sum((~tgt_output_msk).reshape(-1).float()).item()
 
             total_acc += correct
 
@@ -311,18 +314,22 @@ def evalulate(epoch_num):
 
             steps += 1
 
-        mylogger.log("val_acc: {:.2f} val_loss : {:.2f}".format(
-            total_acc/steps, total_loss/steps))
+        mylogger.log(
+            "val_acc: {:.2f} val_loss : {:.2f}".format(
+                total_acc / steps, total_loss / steps
+            )
+        )
+
 
 start_epoch = 0
 
-if not args.restart_point =='':
-    start_epoch = int(args.restart_point.split('_')[-1].split('.')[0][2:]) + 1
+if not args.restart_point == "":
+    start_epoch = int(args.restart_point.split("_")[-1].split(".")[0][2:]) + 1
     mylogger.log("starting from epoch {}".format(start_epoch))
 
 max_epoch = 15000
 mylogger.log("max epoch :{}".format(max_epoch))
-for i in range(start_epoch,max_epoch):
+for i in range(start_epoch, max_epoch):
     model.to(device)
     train(i)
     evalulate(i)
@@ -330,13 +337,15 @@ for i in range(start_epoch,max_epoch):
 
     if i % 10 == 0:
         # save state dicts
-        torch.save(model.state_dict(), os.path.join(
-            checkpoint_folder, "model_ep{}.pt".format(i)))
-        torch.save(optimizer.state_dict(), os.path.join(
-            checkpoint_folder, "optimizer_ep{}.pt".format(i)))
-        torch.save(scheduler.state_dict(), os.path.join(
-            checkpoint_folder, "scheduler_ep{}.pt".format(i)))
-
-    
-
-    
+        torch.save(
+            model.state_dict(),
+            os.path.join(checkpoint_folder, "model_ep{}.pt".format(i)),
+        )
+        torch.save(
+            optimizer.state_dict(),
+            os.path.join(checkpoint_folder, "optimizer_ep{}.pt".format(i)),
+        )
+        torch.save(
+            scheduler.state_dict(),
+            os.path.join(checkpoint_folder, "scheduler_ep{}.pt".format(i)),
+        )
